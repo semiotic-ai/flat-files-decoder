@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "decoder"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -932,6 +932,7 @@ dependencies = [
  "rand 0.8.5",
  "reth-blockchain-tree",
  "reth-primitives",
+ "reth-rlp",
  "revm-primitives",
  "serde",
  "serde_json",
