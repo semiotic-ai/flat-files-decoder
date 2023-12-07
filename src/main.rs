@@ -3,8 +3,8 @@ use decoder::decode_flat_files;
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[clap(short, long, default_value = "input_files")]
-    input: String,
+    #[clap(short, long)]
+    input: Option<String>,
     #[clap(long)]
     headers_dir: Option<String>,
     #[clap(short, long)]
@@ -13,9 +13,13 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    let input = match args.input {
+        Some(input) => decoder::DecodeInput::Path(input),
+        None => decoder::DecodeInput::Stdin,
+    };
 
     let blocks = decode_flat_files(
-        &args.input,
+        input,
         args.output.as_deref(),
         args.headers_dir.as_deref(),
     )

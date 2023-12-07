@@ -20,9 +20,14 @@ use protos::block::Block;
 use receipts::check_receipt_root;
 use std::fs;
 use std::fs::File;
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Write, Read};
 use std::path::PathBuf;
+use zstd::Decoder;
 
+pub enum DecodeInput {
+    Path(String),
+    Stdin
+}
 /**
 * Decode & verify flat files from a directory or a single file.
 * Input can be a directory or a file.
@@ -34,23 +39,35 @@ use std::path::PathBuf;
 * If output is not provided, the decoded blocks will not be written to disk.
 **/
 pub fn decode_flat_files(
-    input: &str,
+    input: DecodeInput,
     output: Option<&str>,
     headers_dir: Option<&str>,
 ) -> Result<Vec<Block>, DecodeError> {
-    let metadata = fs::metadata(input).map_err(DecodeError::IoError)?;
+    match input {
+        DecodeInput::Path(input) => {
+            let metadata = fs::metadata(&input).map_err(DecodeError::IoError)?;
 
-    if let Some(output) = output {
-        fs::create_dir_all(output).map_err(DecodeError::IoError)?;
-    }
+            if let Some(output) = output {
+                fs::create_dir_all(output).map_err(DecodeError::IoError)?;
+            }
 
-    if metadata.is_dir() {
-        decode_flat_files_dir(input, output, headers_dir)
-    } else if metadata.is_file() {
-        handle_file(&PathBuf::from(input), output, headers_dir)
-    } else {
-        Err(DecodeError::InvalidInput)
+            if metadata.is_dir() {
+                decode_flat_files_dir(&input, output, headers_dir)
+            } else if metadata.is_file() {
+                handle_file(&PathBuf::from(input), output, headers_dir)
+            } else {
+                Err(DecodeError::InvalidInput)
+            }
+        }
+        DecodeInput::Stdin => {
+            let mut buf = vec![];
+            let mut decoder = Decoder::new(std::io::stdin()).map_err(DecodeError::IoError)?;
+            decoder.read_to_end(&mut buf).map_err(DecodeError::IoError)?;
+            std::io::stdin().read_to_end(&mut buf).map_err(DecodeError::IoError)?;
+            handle_buf(&buf)
+        }
     }
+    
 }
 
 fn decode_flat_files_dir(

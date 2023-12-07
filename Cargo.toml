@@ -17,6 +17,9 @@ reth-primitives = { git = "https://github.com/paradigmxyz/reth", version = "=0.1
 thiserror = "1.0.44"
 serde_json = "1.0.104"
 serde = { version = "1.0.180", features = ["derive"] }
+ethportal-api = "0.2.2"
+zstd = "0.13.0"
+# ethportal-api = { git = "https://github.com/ethereum/trin.git", version = "0.2.2" } 
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
