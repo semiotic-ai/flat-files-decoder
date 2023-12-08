@@ -64,7 +64,7 @@ pub fn decode_flat_files(
             let mut decoder = Decoder::new(std::io::stdin()).map_err(DecodeError::IoError)?;
             decoder.read_to_end(&mut buf).map_err(DecodeError::IoError)?;
             std::io::stdin().read_to_end(&mut buf).map_err(DecodeError::IoError)?;
-            handle_buf(&buf)
+            handle_multiple_bufs(&buf)
         }
     }
     
@@ -147,6 +147,37 @@ pub fn handle_buf(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
     }
 
     Ok(blocks)
+}
+
+pub fn handle_multiple_bufs(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
+    let mut all_blocks = Vec::new();
+    let mut start = 0;
+
+    while start < buf.len() {
+        // Find the next 'dbin' header starting from 'start'
+        if let Some(next_start) = find_next_dbin_header(&buf[start+1..]) {
+            // Process the current file slice
+            let file_buf = &buf[start..];
+            let blocks = handle_buf(file_buf)?;
+            all_blocks.extend(blocks);
+
+            // Move to the next file
+            start += next_start+1;
+        } else {
+            // No more files found
+            break;
+        }
+    }
+
+    Ok(all_blocks)
+}
+
+fn find_next_dbin_header(buf: &[u8]) -> Option<usize> {
+    // Define the header to search for - in this case, the ASCII bytes for "dbin"
+    let header = b"dbin";
+
+    // Search for the header in the buffer
+    buf.windows(header.len()).position(|window| window == header)
 }
 
 fn handle_block(
