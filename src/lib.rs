@@ -151,20 +151,24 @@ pub fn handle_buf(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
 
 pub fn handle_multiple_bufs(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
     let mut all_blocks = Vec::new();
-    let mut start = 0;
+    let mut start = find_next_dbin_header(&buf).ok_or(DecodeError::InvalidInput)?;
 
     while start < buf.len() {
-        // Find the next 'dbin' header starting from 'start'
         if let Some(next_start) = find_next_dbin_header(&buf[start+1..]) {
+
             // Process the current file slice
-            let file_buf = &buf[start..];
+            let file_buf = &buf[start..next_start+start+1];
             let blocks = handle_buf(file_buf)?;
             all_blocks.extend(blocks);
 
             // Move to the next file
             start += next_start+1;
         } else {
-            // No more files found
+            // Process last file
+            let file_buf = &buf[start..];
+            let blocks = handle_buf(file_buf)?;
+            all_blocks.extend(blocks);
+
             break;
         }
     }
