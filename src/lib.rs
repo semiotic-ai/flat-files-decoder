@@ -15,8 +15,8 @@ use crate::error::DecodeError;
 use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
-use protobuf::Message;
-use protos::block::Block;
+use protobuf::{Message, MessageField};
+use protos::block::{Block, BlockHeader};
 use receipts::check_receipt_root;
 use std::fs;
 use std::fs::File;
@@ -192,6 +192,44 @@ fn handle_block(
     }
 
     Ok(block)
+}
+
+pub fn extract_block_headers(buf: &[u8]) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
+    let dbin_files_vec = DbinFile::try_from_read_multiple(&mut Cursor::new(buf))?;
+    let mut block_headers = Vec::new();
+    for dbin_file in dbin_files_vec {
+        for message in dbin_file.messages {
+            block_headers.push(handle_block_header(message)?);
+        }
+    }
+    Ok(block_headers)
+}
+
+
+
+fn handle_block_header(
+    message: Vec<u8>,
+) -> Result<MessageField<BlockHeader>, DecodeError> {
+    let message: protos::bstream::Block = Message::parse_from_bytes(&message)
+        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+    let block: Block = Message::parse_from_bytes(&message.payload_buffer)
+        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+    if block.number != 0 {
+        check_receipt_root(&block)?;
+        check_transaction_root(&block)?;
+    }
+    
+    Ok(block.header)
+}
+
+pub fn stream_to_blocks<R: std::io::Read>(
+    reader: R,
+) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
+    let buf = decode_all(reader)?;
+    let block_headers= extract_block_headers(&buf)?;
+    Ok(block_headers)
 }
 
 #[cfg(test)]
