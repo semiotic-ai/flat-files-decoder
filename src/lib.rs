@@ -20,9 +20,9 @@ use protos::block::Block;
 use receipts::check_receipt_root;
 use std::fs;
 use std::fs::File;
-use std::io::{Cursor, Write, Read};
+use std::io::{Cursor, Write};
 use std::path::PathBuf;
-use zstd::Decoder;
+use zstd::decode_all;
 
 pub enum DecodeInput {
     Path(String),
@@ -60,14 +60,12 @@ pub fn decode_flat_files(
             }
         }
         DecodeInput::Stdin => {
-            let mut buf = vec![];
-            let mut decoder = Decoder::new(std::io::stdin()).map_err(DecodeError::IoError)?;
-            decoder.read_to_end(&mut buf).map_err(DecodeError::IoError)?;
-            std::io::stdin().read_to_end(&mut buf).map_err(DecodeError::IoError)?;
-            handle_multiple_bufs(&buf)
+            let reader = std::io::stdin();
+            let buf = decode_all(reader)?;
+            let blocks = handle_multiple_bufs(&buf)?;
+            Ok(blocks)
         }
     }
-    
 }
 
 fn decode_flat_files_dir(
@@ -150,38 +148,16 @@ pub fn handle_buf(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
 }
 
 pub fn handle_multiple_bufs(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
-    let mut all_blocks = Vec::new();
-    let mut start = find_next_dbin_header(&buf).ok_or(DecodeError::InvalidInput)?;
-
-    while start < buf.len() {
-        // Find the next 'dbin' header starting from 'start'
-        if let Some(next_start) = find_next_dbin_header(&buf[start+1..]) {
-            // Process the current file slice
-            let file_buf = &buf[start..next_start+start+1];
-            let blocks = handle_buf(file_buf)?;
-            all_blocks.extend(blocks);
-
-            // Move to the next file
-            start += next_start+1;
-        } else {
-            let file_buf = &buf[start..];
-            let blocks = handle_buf(file_buf)?;
-            all_blocks.extend(blocks);
-            // No more files found
-            break;
+    let dbin_files_vec = DbinFile::try_from_read_multiple(&mut Cursor::new(buf))?;
+    let mut blocks = Vec::new();
+    for dbin_file in dbin_files_vec {
+        for message in dbin_file.messages {
+            blocks.push(handle_block(message, None, None)?);
         }
     }
-
-    Ok(all_blocks)
+    Ok(blocks)
 }
 
-fn find_next_dbin_header(buf: &[u8]) -> Option<usize> {
-    // Define the header to search for - in this case, the ASCII bytes for "dbin"
-    let header = b"dbin";
-
-    // Search for the header in the buffer
-    buf.windows(header.len()).position(|window| window == header)
-}
 
 fn handle_block(
     message: Vec<u8>,
