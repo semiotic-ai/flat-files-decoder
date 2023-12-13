@@ -10,4 +10,18 @@ pub enum DbinFileError {
     InvalidUTF8(#[from] std::string::FromUtf8Error),
     #[error("Unsupported version")]
     UnsupportedDBINVersion,
+    #[error("Start of new DBIN file")]
+    StartOfNewDBINFile,
+}
+
+impl DbinFileError{
+    pub fn kind(&self) -> std::io::ErrorKind {
+        match self {
+            DbinFileError::StartOfNewDBINFile => std::io::ErrorKind::Other,
+            DbinFileError::InvalidDBINBytes => todo!(),
+            DbinFileError::ReadError(UnexpectedEof) => std::io::ErrorKind::UnexpectedEof,
+            DbinFileError::InvalidUTF8(_) => todo!(),
+            DbinFileError::UnsupportedDBINVersion => todo!(),
+        }
+    }
 }

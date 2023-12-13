@@ -11,6 +11,7 @@ pub mod protos;
 mod receipts;
 mod transactions;
 
+use crate::dbin::error::DbinFileError;
 use crate::error::DecodeError;
 use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
@@ -28,7 +29,7 @@ use rayon::prelude::*;
 
 pub enum DecodeInput {
     Path(String),
-    Stdin
+    Reader(Box<dyn Read>),
 }
 /**
 * Decode & verify flat files from a directory or a single file.
@@ -61,10 +62,8 @@ pub fn decode_flat_files(
                 Err(DecodeError::InvalidInput)
             }
         }
-        DecodeInput::Stdin => {
-            let reader = std::io::stdin();
-            let buf = decode_all(reader)?;
-            let blocks = handle_multiple_bufs(&buf)?;
+        DecodeInput::Reader(reader) => {
+            let blocks = extract_blocks(reader)?;
             Ok(blocks)
         }
     }
@@ -125,7 +124,7 @@ pub fn handle_file(
     let mut blocks: Vec<Block> = vec![];
 
     for message in dbin_file.messages {
-        blocks.push(handle_block(message, output, headers_dir)?);
+        blocks.push(handle_block(&message, output, headers_dir)?);
     }
 
     Ok(blocks)
@@ -143,30 +142,17 @@ pub fn handle_buf(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
     let mut blocks: Vec<Block> = vec![];
 
     for message in dbin_file.messages {
-        blocks.push(handle_block(message, None, None)?);
-    }
-
-    Ok(blocks)
-}
-
-pub fn handle_multiple_bufs(buf: &[u8]) -> Result<Vec<Block>, DecodeError> {
-    let dbin_files_vec = DbinFile::try_from_read_multiple(&mut Cursor::new(buf))?;
-    let mut blocks = Vec::new();
-    for dbin_file in dbin_files_vec {
-        for message in dbin_file.messages {
-            blocks.push(handle_block(message, None, None)?);
-        }
+        blocks.push(handle_block(&message, None, None)?);
     }
     Ok(blocks)
 }
-
 
 fn handle_block(
-    message: Vec<u8>,
+    message: &Vec<u8>,
     output: Option<&str>,
     headers_dir: Option<&str>,
 ) -> Result<Block, DecodeError> {
-    let message: protos::bstream::Block = Message::parse_from_bytes(&message)
+    let message: protos::bstream::Block = Message::parse_from_bytes(message)
         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
     let block: Block = Message::parse_from_bytes(&message.payload_buffer)
@@ -207,18 +193,18 @@ pub fn extract_block_headers<R: Read>(mut reader: R) -> Result<Vec<MessageField<
     log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
     log::debug!("Parsing messages");
     loop {
-        let result = DbinFile::read_message_streaming(&mut reader);
+        let result = DbinFile::read_message(&mut reader);
         match result {
-            Ok(Some(message)) => messages.push(message),
-            Ok(None) => {
-                let header_info = DbinFile::read_partial_header(&mut reader)?;
-                log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
-            },
+            Ok(message) => messages.push(message),
             Err(err) => {
-                if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                if err.kind() == std::io::ErrorKind::Other {
+                    let header_info = DbinFile::read_partial_header(&mut reader)?;
+                    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
+                } else if err.kind() ==  std::io::ErrorKind::UnexpectedEof{
                     break;
-                } else {
-                    return Err(DecodeError::IoError(err));
+                }
+                else {
+                    return Err(DecodeError::DbinFileError(err));
                 }
             }
         };
@@ -228,6 +214,41 @@ pub fn extract_block_headers<R: Read>(mut reader: R) -> Result<Vec<MessageField<
     // Parallel processing of block headers
     messages.par_iter()
         .map(|message| handle_block_header(message))
+        .collect()
+}
+
+pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError> {
+    log::debug!("Reading messages");
+    let mut buf = Vec::new();
+    reader.read_to_end(&mut buf)?;
+
+    let mut reader = Cursor::new(buf);
+    let mut messages = Vec::new();
+    let header_info = DbinFile::read_header(&mut reader)?;
+    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
+    log::debug!("Parsing messages");
+    loop {
+        let result = DbinFile::read_message(&mut reader);
+        match result {
+            Ok(message) => messages.push(message),
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::Other {
+                    let header_info = DbinFile::read_partial_header(&mut reader)?;
+                    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
+                } else if err.kind() ==  std::io::ErrorKind::UnexpectedEof{
+                    break;
+                }
+                else {
+                    return Err(DecodeError::DbinFileError(err));
+                }
+            }
+        };
+    }
+    log::debug!("Validating blocks");
+
+    // Parallel processing of block headers
+    messages.par_iter()
+        .map(|message| handle_block(message, None, None))
         .collect()
 }
 

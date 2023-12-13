@@ -15,7 +15,7 @@ fn main() {
     let args = Args::parse();
     let input = match args.input {
         Some(input) => decoder::DecodeInput::Path(input),
-        None => decoder::DecodeInput::Stdin,
+        None => decoder::DecodeInput::Reader(Box::new(std::io::stdin())),
     };
 
     let blocks = decode_flat_files(
