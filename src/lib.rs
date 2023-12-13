@@ -18,11 +18,13 @@ use dbin::DbinFile;
 use protobuf::{Message, MessageField};
 use protos::block::{Block, BlockHeader};
 use receipts::check_receipt_root;
+use simple_log::log;
 use std::fs;
 use std::fs::File;
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Write, Read};
 use std::path::PathBuf;
 use zstd::decode_all;
+use rayon::prelude::*;
 
 pub enum DecodeInput {
     Path(String),
@@ -194,21 +196,44 @@ fn handle_block(
     Ok(block)
 }
 
-pub fn extract_block_headers(buf: &[u8]) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
-    let dbin_files_vec = DbinFile::try_from_read_multiple(&mut Cursor::new(buf))?;
-    let mut block_headers = Vec::new();
-    for dbin_file in dbin_files_vec {
-        for message in dbin_file.messages {
-            block_headers.push(handle_block_header(message)?);
-        }
+pub fn extract_block_headers<R: Read>(mut reader: R) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
+    log::debug!("Reading messages");
+    let mut buf = Vec::new();
+    reader.read_to_end(&mut buf)?;
+
+    let mut reader = Cursor::new(buf);
+    let mut messages = Vec::new();
+    let header_info = DbinFile::read_header(&mut reader)?;
+    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
+    log::debug!("Parsing messages");
+    loop {
+        let result = DbinFile::read_message_streaming(&mut reader);
+        match result {
+            Ok(Some(message)) => messages.push(message),
+            Ok(None) => {
+                let header_info = DbinFile::read_partial_header(&mut reader)?;
+                log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
+            },
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                    break;
+                } else {
+                    return Err(DecodeError::IoError(err));
+                }
+            }
+        };
     }
-    Ok(block_headers)
+    log::debug!("Validating blocks");
+
+    // Parallel processing of block headers
+    messages.par_iter()
+        .map(|message| handle_block_header(message))
+        .collect()
 }
 
 
-
 fn handle_block_header(
-    message: Vec<u8>,
+    message: &Vec<u8>,
 ) -> Result<MessageField<BlockHeader>, DecodeError> {
     let message: protos::bstream::Block = Message::parse_from_bytes(&message)
         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
@@ -224,13 +249,6 @@ fn handle_block_header(
     Ok(block.header)
 }
 
-pub fn stream_to_blocks<R: std::io::Read>(
-    reader: R,
-) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
-    let buf = decode_all(reader)?;
-    let block_headers= extract_block_headers(&buf)?;
-    Ok(block_headers)
-}
 
 #[cfg(test)]
 mod tests {
