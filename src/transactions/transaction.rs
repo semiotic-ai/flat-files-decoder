@@ -85,14 +85,14 @@ impl TryFrom<&TransactionTrace> for Transaction {
 }
 
 pub fn get_tx_kind(trace: &TransactionTrace) -> Result<TransactionKind, TransactionError> {
-    // let first_call = trace.calls.first().ok_or(TransactionError::MissingCall)?;
-    let to = &trace.to;
-    // let call_type = first_call
-    //     .call_type
-    //     .enum_value()
-    //     .map_err(|_| TransactionError::MissingCall)?;
+    let first_call = trace.calls.first().ok_or(TransactionError::MissingCall)?;
 
-    if to.is_empty() {
+    let call_type = first_call
+        .call_type
+        .enum_value()
+        .map_err(|_| TransactionError::MissingCall)?;
+
+    if call_type == CallType::CREATE {
         Ok(TransactionKind::Create)
     } else {
         let address = Address::from_slice(trace.to.as_slice());
