@@ -183,11 +183,6 @@ pub fn extract_block_headers<R: Read>(
     mut reader: R,
 ) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
     log::debug!("Reading messages");
-    let mut buf = Vec::new();
-    reader.read_to_end(&mut buf)?;
-
-    let mut reader = Cursor::new(buf);
-    log::debug!("Parsing messages");
     let dbin_file = DbinFile::try_from_read(&mut reader)?;
     log::debug!("Validating blocks");
 
@@ -201,11 +196,6 @@ pub fn extract_block_headers<R: Read>(
 
 pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError> {
     log::debug!("Reading messages");
-    let mut buf = Vec::new();
-    reader.read_to_end(&mut buf)?;
-
-    let mut reader = Cursor::new(buf);
-    log::debug!("Parsing messages");
     let dbin_file = DbinFile::try_from_read(&mut reader)?;
     log::debug!("Validating blocks");
 
