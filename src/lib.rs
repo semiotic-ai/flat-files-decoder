@@ -239,6 +239,11 @@ pub fn stream_blocks<R: Read, W: Write>(
         let block: Block = Message::parse_from_bytes(&message.payload_buffer)
             .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
+        if block.number != 0 {
+            check_receipt_root(&block)?;
+            check_transaction_root(&block)?;
+        }
+
         let header_record_with_number = HeaderRecordWithNumber {
             block_hash: block.hash,
             total_difficulty: block.header.total_difficulty.as_ref().ok_or(DecodeError::InvalidInput)?.bytes.clone(),
