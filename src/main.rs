@@ -1,6 +1,6 @@
-use std::io::{self, BufReader, BufWriter};
 use clap::Parser;
 use decoder::{decode_flat_files, stream_blocks};
+use std::io::{self, BufReader, BufWriter};
 
 #[derive(Parser, Debug)]
 struct Args {

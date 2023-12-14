@@ -15,17 +15,15 @@ use crate::error::DecodeError;
 use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
-use ethportal_api::types::execution::accumulator::HeaderRecord;
 use protobuf::{Message, MessageField};
 use protos::block::{Block, BlockHeader};
 use rayon::prelude::*;
 use receipts::check_receipt_root;
-use ethereum_types::{H256, U256};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use simple_log::log;
 use std::fs;
 use std::fs::File;
-use std::io::{Cursor, Read, Write, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::path::PathBuf;
 
 pub enum DecodeInput {
@@ -182,7 +180,7 @@ fn handle_block(
     Ok(block)
 }
 
-pub fn extract_block_headers<R: Read+BufRead>(
+pub fn extract_block_headers<R: Read + BufRead>(
     mut reader: R,
 ) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
     log::debug!("Reading messages");
@@ -227,10 +225,7 @@ fn handle_block_header(message: &Vec<u8>) -> Result<MessageField<BlockHeader>, D
 
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer
-pub fn stream_blocks<R: Read, W: Write>(
-    mut reader: R,
-    mut writer: W,
-) -> Result<(), DecodeError> {
+pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W) -> Result<(), DecodeError> {
     let dbin_file = DbinFile::try_from_read(&mut reader)?;
     for message in dbin_file.messages {
         let message: protos::bstream::Block = Message::parse_from_bytes(&message)
@@ -242,7 +237,7 @@ pub fn stream_blocks<R: Read, W: Write>(
         if block.number != 0 {
             let valid_receipts = check_receipt_root(&block);
             match valid_receipts {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     log::error!("Invalid receipt root: {}", err);
                     continue;
@@ -250,16 +245,23 @@ pub fn stream_blocks<R: Read, W: Write>(
             }
             let valid_transactions = check_transaction_root(&block);
             match valid_transactions {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     log::error!("Invalid transaction root: {}", err);
                     continue;
-                }            }
+                }
+            }
         }
 
         let header_record_with_number = HeaderRecordWithNumber {
             block_hash: block.hash,
-            total_difficulty: block.header.total_difficulty.as_ref().ok_or(DecodeError::InvalidInput)?.bytes.clone(),
+            total_difficulty: block
+                .header
+                .total_difficulty
+                .as_ref()
+                .ok_or(DecodeError::InvalidInput)?
+                .bytes
+                .clone(),
             block_number: block.number,
         };
 
@@ -267,16 +269,15 @@ pub fn stream_blocks<R: Read, W: Write>(
             .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
         writer
-            .write_all((header_record_json+"\n").as_bytes())
+            .write_all((header_record_json + "\n").as_bytes())
             .map_err(DecodeError::IoError)?;
         writer.flush().map_err(DecodeError::IoError)?;
-
     }
     Ok(())
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct HeaderRecordWithNumber{
+pub struct HeaderRecordWithNumber {
     pub block_hash: Vec<u8>,
     pub total_difficulty: Vec<u8>,
     pub block_number: u64,
