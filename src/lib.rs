@@ -15,14 +15,17 @@ use crate::error::DecodeError;
 use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
+use ethportal_api::types::execution::accumulator::HeaderRecord;
 use protobuf::{Message, MessageField};
 use protos::block::{Block, BlockHeader};
 use rayon::prelude::*;
 use receipts::check_receipt_root;
+use ethereum_types::{H256, U256};
+use serde::{Serialize, Deserialize};
 use simple_log::log;
 use std::fs;
 use std::fs::File;
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Write, BufRead, BufReader};
 use std::path::PathBuf;
 
 pub enum DecodeInput {
@@ -113,7 +116,7 @@ pub fn handle_file(
     output: Option<&str>,
     headers_dir: Option<&str>,
 ) -> Result<Vec<Block>, DecodeError> {
-    let mut input_file = File::open(path).map_err(DecodeError::IoError)?;
+    let mut input_file = BufReader::new(File::open(path).map_err(DecodeError::IoError)?);
     let dbin_file = DbinFile::try_from_read(&mut input_file)?;
     if dbin_file.content_type != "ETH" {
         return Err(DecodeError::InvalidContentType(dbin_file.content_type));
@@ -179,7 +182,7 @@ fn handle_block(
     Ok(block)
 }
 
-pub fn extract_block_headers<R: Read>(
+pub fn extract_block_headers<R: Read+BufRead>(
     mut reader: R,
 ) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
     log::debug!("Reading messages");
@@ -236,11 +239,21 @@ pub fn stream_blocks<R: Read, W: Write>(
         let block: Block = Message::parse_from_bytes(&message.payload_buffer)
             .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
-        let block_json = protobuf_json_mapping::print_to_string(&block)
+        let header_record: HeaderRecord = HeaderRecord {
+            block_hash: H256::from_slice(&block.hash),
+            total_difficulty: U256::try_from(block.header.total_difficulty.as_ref().ok_or(DecodeError::InvalidInput)?.bytes.as_slice()).map_err(|_| DecodeError::InvalidInput)?,
+        };
+
+        let header_record_with_number = HeaderRecordWithNumber {
+            header_record,
+            block_number: block.number,
+        };
+
+        let header_record_json = serde_json::to_string(&header_record_with_number)
             .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
         writer
-            .write_all((block_json+"\n").as_bytes())
+            .write_all((header_record_json+"\n").as_bytes())
             .map_err(DecodeError::IoError)?;
         writer.flush().map_err(DecodeError::IoError)?;
 
@@ -248,6 +261,11 @@ pub fn stream_blocks<R: Read, W: Write>(
     Ok(())
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct HeaderRecordWithNumber{
+    pub header_record: HeaderRecord,
+    pub block_number: u64,
+}
 #[cfg(test)]
 mod tests {
     use crate::dbin::DbinFile;
@@ -256,6 +274,7 @@ mod tests {
     use crate::{handle_file, protos, receipts};
     use protobuf::Message;
     use std::fs::File;
+    use std::io::BufReader;
     use std::path::PathBuf;
 
     #[test]
@@ -270,7 +289,7 @@ mod tests {
     #[test]
     fn test_check_valid_root_fail() {
         let path = PathBuf::from("example0017686312.dbin");
-        let mut file = File::open(path).expect("Failed to open file");
+        let mut file = BufReader::new(File::open(path).expect("Failed to open file"));
         let dbin_file = DbinFile::try_from_read(&mut file).expect("Failed to parse dbin file");
 
         let message = dbin_file.messages[0].clone();

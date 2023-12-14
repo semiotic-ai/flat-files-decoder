@@ -18,10 +18,11 @@ reth-rlp = { git = "https://github.com/paradigmxyz/reth", version = "=0.1.0-alph
 thiserror = "1.0.44"
 serde_json = "1.0.104"
 serde = { version = "1.0.180", features = ["derive"] }
-ethportal-api = "0.2.2"
+ethportal-api = {git = "https://github.com/ethereum/trin.git", version = "0.2.2"}
 zstd = "0.13.0"
 simple-log = "1.6.0"
 rayon = "1.8.0"
+ethereum-types = "=0.14.1"
 # ethportal-api = { git = "https://github.com/ethereum/trin.git", version = "0.2.2" } 
 
 [dev-dependencies]
@@ -30,3 +31,7 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 [[bench]]
 name = "decoder"
 harness = false
+
+[profile.release]
+codegen-units = 1
+lto = false

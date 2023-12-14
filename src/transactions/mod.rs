@@ -53,6 +53,7 @@ mod tests {
         Address, Bytes, TransactionKind, TransactionSigned, TxHash, TxType, U256,
     };
     use std::fs::File;
+    use std::io::BufReader;
     use std::str::FromStr;
 
     #[test]
@@ -69,7 +70,7 @@ mod tests {
 
     #[test]
     fn example_file_first_tx() {
-        let mut input_file = File::open("example0017686312.dbin").unwrap();
+        let mut input_file = BufReader::new(File::open("example0017686312.dbin").unwrap());
 
         let dbin_file = DbinFile::try_from_read(&mut input_file).unwrap();
 
@@ -136,7 +137,7 @@ mod tests {
 
     #[test]
     fn legacy_tx() {
-        let mut input_file = File::open("example0017686312.dbin").unwrap();
+        let mut input_file = BufReader::new(File::open("example0017686312.dbin").unwrap());
 
         let dbin_file = DbinFile::try_from_read(&mut input_file).unwrap();
 
@@ -182,7 +183,7 @@ mod tests {
 
     #[test]
     fn create_tx() {
-        let mut input_file = File::open("example-create-17686085.dbin").unwrap();
+        let mut input_file = BufReader::new(File::open("example-create-17686085.dbin").unwrap());
 
         let dbin_file = DbinFile::try_from_read(&mut input_file).unwrap();
 
