@@ -188,31 +188,13 @@ pub fn extract_block_headers<R: Read>(mut reader: R) -> Result<Vec<MessageField<
     reader.read_to_end(&mut buf)?;
 
     let mut reader = Cursor::new(buf);
-    let mut messages = Vec::new();
-    let header_info = DbinFile::read_header(&mut reader)?;
-    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
     log::debug!("Parsing messages");
-    loop {
-        let result = DbinFile::read_message(&mut reader);
-        match result {
-            Ok(message) => messages.push(message),
-            Err(err) => {
-                if err.kind() == std::io::ErrorKind::Other {
-                    let header_info = DbinFile::read_partial_header(&mut reader)?;
-                    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
-                } else if err.kind() ==  std::io::ErrorKind::UnexpectedEof{
-                    break;
-                }
-                else {
-                    return Err(DecodeError::DbinFileError(err));
-                }
-            }
-        };
-    }
+    let dbin_file = DbinFile::try_from_read(&mut reader)?;
     log::debug!("Validating blocks");
 
+
     // Parallel processing of block headers
-    messages.par_iter()
+    dbin_file.messages.par_iter()
         .map(|message| handle_block_header(message))
         .collect()
 }
@@ -223,31 +205,12 @@ pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError>
     reader.read_to_end(&mut buf)?;
 
     let mut reader = Cursor::new(buf);
-    let mut messages = Vec::new();
-    let header_info = DbinFile::read_header(&mut reader)?;
-    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
     log::debug!("Parsing messages");
-    loop {
-        let result = DbinFile::read_message(&mut reader);
-        match result {
-            Ok(message) => messages.push(message),
-            Err(err) => {
-                if err.kind() == std::io::ErrorKind::Other {
-                    let header_info = DbinFile::read_partial_header(&mut reader)?;
-                    log::debug!("Version: {}, Content Type: {}, Content Version: {}", header_info.0, header_info.1, header_info.2);
-                } else if err.kind() ==  std::io::ErrorKind::UnexpectedEof{
-                    break;
-                }
-                else {
-                    return Err(DecodeError::DbinFileError(err));
-                }
-            }
-        };
-    }
+    let dbin_file = DbinFile::try_from_read(&mut reader)?;
     log::debug!("Validating blocks");
 
     // Parallel processing of block headers
-    messages.par_iter()
+    dbin_file.messages.par_iter()
         .map(|message| handle_block(message, None, None))
         .collect()
 }

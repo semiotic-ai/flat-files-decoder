@@ -12,6 +12,9 @@ pub enum DbinFileError {
     UnsupportedDBINVersion,
     #[error("Start of new DBIN file")]
     StartOfNewDBINFile,
+    #[error("DBIN files with different versions")]
+    DifferingDBINVersions,
+    
 }
 
 impl DbinFileError{
@@ -22,6 +25,7 @@ impl DbinFileError{
             DbinFileError::ReadError(UnexpectedEof) => std::io::ErrorKind::UnexpectedEof,
             DbinFileError::InvalidUTF8(_) => todo!(),
             DbinFileError::UnsupportedDBINVersion => todo!(),
+            DbinFileError::DifferingDBINVersions => todo!(),
         }
     }
 }

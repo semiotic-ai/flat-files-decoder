@@ -62,15 +62,22 @@ impl DbinFile {
             match Self::read_message(read) {
                 Ok(message) => messages.push(message),
                 Err(err) => {
-                    return if err.kind() == std::io::ErrorKind::UnexpectedEof  {
-                        Ok(DbinFile {
+                    if err.kind() == std::io::ErrorKind::UnexpectedEof  {
+                        return Ok(DbinFile {
                             version,
                             content_type,
                             content_version,
                             messages,
                         })
+                    } else if err.kind() == std::io::ErrorKind::Other {
+                        // Check that version, content_type, and content_version match the previous header
+                        let (new_version, new_content_type, new_content_version) = Self::read_partial_header(read)?;
+                        if version != new_version || content_type != new_content_type || content_version != new_content_version {
+                            return Err(DbinFileError::DifferingDBINVersions)
+                        }
+
                     } else {
-                        Err(err)
+                        return Err(err)
                     }
                 }
             }
