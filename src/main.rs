@@ -18,12 +18,8 @@ fn main() {
         None => decoder::DecodeInput::Reader(Box::new(std::io::stdin())),
     };
 
-    let blocks = decode_flat_files(
-        input,
-        args.output.as_deref(),
-        args.headers_dir.as_deref(),
-    )
-    .expect("Failed to decode files");
+    let blocks = decode_flat_files(input, args.output.as_deref(), args.headers_dir.as_deref())
+        .expect("Failed to decode files");
 
     println!("Total blocks: {}", blocks.len());
 }

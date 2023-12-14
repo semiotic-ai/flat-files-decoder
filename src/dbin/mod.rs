@@ -1,7 +1,7 @@
 pub mod error;
 
 use crate::dbin::error::DbinFileError;
-use std::io::{Read, Seek, BufRead};
+use std::io::Read;
 
 pub struct DbinFile {
     pub version: u8,
@@ -12,17 +12,18 @@ pub struct DbinFile {
 
 impl DbinFile {
     pub fn read_header<R: Read>(read: &mut R) -> Result<(u8, String, String), DbinFileError> {
-
         let mut buf: [u8; 4] = [0; 4];
         read.read_exact(&mut buf)
             .map_err(DbinFileError::ReadError)?;
 
-       let (version, content_type, content_version) = Self::read_partial_header(read)?;
+        let (version, content_type, content_version) = Self::read_partial_header(read)?;
 
         Ok((version, content_type, content_version))
     }
 
-    pub fn read_partial_header<R: Read>(read: &mut R) -> Result<(u8, String, String), DbinFileError> {
+    pub fn read_partial_header<R: Read>(
+        read: &mut R,
+    ) -> Result<(u8, String, String), DbinFileError> {
         let version;
         let content_type;
         let content_version;
@@ -37,18 +38,17 @@ impl DbinFile {
             read.read_exact(&mut content_type_bytes)
                 .map_err(DbinFileError::ReadError)?;
 
-            content_type =
-                String::from_utf8(Vec::from(content_type_bytes)).map_err(DbinFileError::InvalidUTF8)?;
+            content_type = String::from_utf8(Vec::from(content_type_bytes))
+                .map_err(DbinFileError::InvalidUTF8)?;
 
             let mut content_version_bytes: [u8; 2] = [0; 2];
             read.read_exact(&mut content_version_bytes)
                 .map_err(DbinFileError::ReadError)?;
 
-            content_version =
-                String::from_utf8(Vec::from(content_version_bytes)).map_err(DbinFileError::InvalidUTF8)?;
-        }
-        else {
-            return Err(DbinFileError::UnsupportedDBINVersion)
+            content_version = String::from_utf8(Vec::from(content_version_bytes))
+                .map_err(DbinFileError::InvalidUTF8)?;
+        } else {
+            return Err(DbinFileError::UnsupportedDBINVersion);
         }
 
         Ok((version, content_type, content_version))
@@ -62,22 +62,25 @@ impl DbinFile {
             match Self::read_message(read) {
                 Ok(message) => messages.push(message),
                 Err(err) => {
-                    if err.kind() == std::io::ErrorKind::UnexpectedEof  {
+                    if err.kind() == std::io::ErrorKind::UnexpectedEof {
                         return Ok(DbinFile {
                             version,
                             content_type,
                             content_version,
                             messages,
-                        })
+                        });
                     } else if err.kind() == std::io::ErrorKind::Other {
                         // Check that version, content_type, and content_version match the previous header
-                        let (new_version, new_content_type, new_content_version) = Self::read_partial_header(read)?;
-                        if version != new_version || content_type != new_content_type || content_version != new_content_version {
-                            return Err(DbinFileError::DifferingDBINVersions)
+                        let (new_version, new_content_type, new_content_version) =
+                            Self::read_partial_header(read)?;
+                        if version != new_version
+                            || content_type != new_content_type
+                            || content_version != new_content_version
+                        {
+                            return Err(DbinFileError::DifferingDBINVersions);
                         }
-
                     } else {
-                        return Err(err)
+                        return Err(err);
                     }
                 }
             }
@@ -86,15 +89,14 @@ impl DbinFile {
 }
 
 impl DbinFile {
-
     pub fn read_message<R: Read>(read: &mut R) -> Result<Vec<u8>, DbinFileError> {
         let mut size: [u8; 4] = [0; 4];
         read.read_exact(&mut size)?;
-        
+
         if &size == b"dbin" {
             return Err(DbinFileError::StartOfNewDBINFile);
-        } 
-        
+        }
+
         Ok(Self::read_content(size, read)?)
     }
 

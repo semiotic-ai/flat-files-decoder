@@ -14,15 +14,14 @@ pub enum DbinFileError {
     StartOfNewDBINFile,
     #[error("DBIN files with different versions")]
     DifferingDBINVersions,
-    
 }
 
-impl DbinFileError{
+impl DbinFileError {
     pub fn kind(&self) -> std::io::ErrorKind {
         match self {
             DbinFileError::StartOfNewDBINFile => std::io::ErrorKind::Other,
             DbinFileError::InvalidDBINBytes => todo!(),
-            DbinFileError::ReadError(UnexpectedEof) => std::io::ErrorKind::UnexpectedEof,
+            DbinFileError::ReadError(_) => std::io::ErrorKind::UnexpectedEof,
             DbinFileError::InvalidUTF8(_) => todo!(),
             DbinFileError::UnsupportedDBINVersion => todo!(),
             DbinFileError::DifferingDBINVersions => todo!(),

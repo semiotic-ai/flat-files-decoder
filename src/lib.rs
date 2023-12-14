@@ -11,21 +11,19 @@ pub mod protos;
 mod receipts;
 mod transactions;
 
-use crate::dbin::error::DbinFileError;
 use crate::error::DecodeError;
 use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
 use protobuf::{Message, MessageField};
 use protos::block::{Block, BlockHeader};
+use rayon::prelude::*;
 use receipts::check_receipt_root;
 use simple_log::log;
 use std::fs;
 use std::fs::File;
-use std::io::{Cursor, Write, Read};
+use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
-use zstd::decode_all;
-use rayon::prelude::*;
 
 pub enum DecodeInput {
     Path(String),
@@ -165,7 +163,6 @@ fn handle_block(
         check_receipt_root(&block)?;
         check_transaction_root(&block)?;
     }
-    
 
     if let Some(output) = output {
         let file_name = format!("{}/block-{}.json", output, block.number);
@@ -182,7 +179,9 @@ fn handle_block(
     Ok(block)
 }
 
-pub fn extract_block_headers<R: Read>(mut reader: R) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
+pub fn extract_block_headers<R: Read>(
+    mut reader: R,
+) -> Result<Vec<MessageField<BlockHeader>>, DecodeError> {
     log::debug!("Reading messages");
     let mut buf = Vec::new();
     reader.read_to_end(&mut buf)?;
@@ -192,9 +191,10 @@ pub fn extract_block_headers<R: Read>(mut reader: R) -> Result<Vec<MessageField<
     let dbin_file = DbinFile::try_from_read(&mut reader)?;
     log::debug!("Validating blocks");
 
-
     // Parallel processing of block headers
-    dbin_file.messages.par_iter()
+    dbin_file
+        .messages
+        .par_iter()
         .map(|message| handle_block_header(message))
         .collect()
 }
@@ -210,15 +210,14 @@ pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError>
     log::debug!("Validating blocks");
 
     // Parallel processing of block headers
-    dbin_file.messages.par_iter()
+    dbin_file
+        .messages
+        .par_iter()
         .map(|message| handle_block(message, None, None))
         .collect()
 }
 
-
-fn handle_block_header(
-    message: &Vec<u8>,
-) -> Result<MessageField<BlockHeader>, DecodeError> {
+fn handle_block_header(message: &Vec<u8>) -> Result<MessageField<BlockHeader>, DecodeError> {
     let message: protos::bstream::Block = Message::parse_from_bytes(&message)
         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
@@ -229,10 +228,9 @@ fn handle_block_header(
         check_receipt_root(&block)?;
         check_transaction_root(&block)?;
     }
-    
+
     Ok(block.header)
 }
-
 
 #[cfg(test)]
 mod tests {
