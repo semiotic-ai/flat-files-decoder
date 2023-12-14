@@ -266,7 +266,7 @@ message TransactionTrace {
   // smallest ordinal (if more than one).
   TransactionTraceStatus status = 30;
   TransactionReceipt receipt = 31;
-  repeated Call calls = 32;
+  // repeated Call calls = 32;
 }
 
 // AccessTuple represents a list of storage keys for a given contract's address and is used

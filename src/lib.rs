@@ -239,13 +239,9 @@ pub fn stream_blocks<R: Read, W: Write>(
         let block: Block = Message::parse_from_bytes(&message.payload_buffer)
             .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
-        let header_record: HeaderRecord = HeaderRecord {
-            block_hash: H256::from_slice(&block.hash),
-            total_difficulty: U256::try_from(block.header.total_difficulty.as_ref().ok_or(DecodeError::InvalidInput)?.bytes.as_slice()).map_err(|_| DecodeError::InvalidInput)?,
-        };
-
         let header_record_with_number = HeaderRecordWithNumber {
-            header_record,
+            block_hash: block.hash,
+            total_difficulty: block.header.total_difficulty.as_ref().ok_or(DecodeError::InvalidInput)?.bytes.clone(),
             block_number: block.number,
         };
 
@@ -263,7 +259,8 @@ pub fn stream_blocks<R: Read, W: Write>(
 
 #[derive(Serialize, Deserialize)]
 pub struct HeaderRecordWithNumber{
-    pub header_record: HeaderRecord,
+    pub block_hash: Vec<u8>,
+    pub total_difficulty: Vec<u8>,
     pub block_number: u64,
 }
 #[cfg(test)]
