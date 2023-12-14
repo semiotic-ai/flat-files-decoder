@@ -1,5 +1,5 @@
 use clap::Parser;
-use decoder::decode_flat_files;
+use decoder::{decode_flat_files, stream_blocks};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -18,8 +18,9 @@ fn main() {
         None => decoder::DecodeInput::Reader(Box::new(std::io::stdin())),
     };
 
-    let blocks = decode_flat_files(input, args.output.as_deref(), args.headers_dir.as_deref())
-        .expect("Failed to decode files");
+    let result = stream_blocks(std::io::stdin(), std::io::stdout());
+    // let blocks = decode_flat_files(input, args.output.as_deref(), args.headers_dir.as_deref())
+    //     .expect("Failed to decode files");
 
-    println!("Total blocks: {}", blocks.len());
+    // println!("Total blocks: {}", blocks.len());
 }

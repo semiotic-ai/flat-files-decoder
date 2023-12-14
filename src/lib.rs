@@ -222,6 +222,32 @@ fn handle_block_header(message: &Vec<u8>) -> Result<MessageField<BlockHeader>, D
     Ok(block.header)
 }
 
+// pub fn stream_blocks<R: Read, W: Write>()
+// A function which decodes blocks from a reader and writes them, serialized, to a writer
+pub fn stream_blocks<R: Read, W: Write>(
+    mut reader: R,
+    mut writer: W,
+) -> Result<(), DecodeError> {
+    let dbin_file = DbinFile::try_from_read(&mut reader)?;
+    for message in dbin_file.messages {
+        let message: protos::bstream::Block = Message::parse_from_bytes(&message)
+            .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+        let block: Block = Message::parse_from_bytes(&message.payload_buffer)
+            .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+        let block_json = protobuf_json_mapping::print_to_string(&block)
+            .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+        writer
+            .write_all((block_json+"\n").as_bytes())
+            .map_err(DecodeError::IoError)?;
+        writer.flush().map_err(DecodeError::IoError)?;
+
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::dbin::DbinFile;
