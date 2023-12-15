@@ -10,20 +10,26 @@ pub struct DbinFile {
     pub messages: Vec<Vec<u8>>,
 }
 
+pub struct DbinHeader {
+    pub version: u8,
+    pub content_type: String,
+    pub content_version: String,
+}
+
 impl DbinFile {
-    pub fn read_header<R: Read>(read: &mut R) -> Result<(u8, String, String), DbinFileError> {
+    pub fn read_header<R: Read>(read: &mut R) -> Result<DbinHeader, DbinFileError> {
         let mut buf: [u8; 4] = [0; 4];
         read.read_exact(&mut buf)
             .map_err(DbinFileError::ReadError)?;
 
-        let (version, content_type, content_version) = Self::read_partial_header(read)?;
+        let dbin_header = Self::read_partial_header(read)?;
 
-        Ok((version, content_type, content_version))
+        Ok(dbin_header)
     }
 
     pub fn read_partial_header<R: Read>(
         read: &mut R,
-    ) -> Result<(u8, String, String), DbinFileError> {
+    ) -> Result<DbinHeader, DbinFileError> {
         let version;
         let content_type;
         let content_version;
@@ -51,11 +57,15 @@ impl DbinFile {
             return Err(DbinFileError::UnsupportedDBINVersion);
         }
 
-        Ok((version, content_type, content_version))
+        Ok(DbinHeader {
+            version,
+            content_type,
+            content_version,
+        })
     }
 
     pub fn try_from_read<R: Read>(read: &mut R) -> Result<Self, DbinFileError> {
-        let (version, content_type, content_version) = Self::read_header(read)?;
+        let dbin_header = Self::read_header(read)?;
         let mut messages: Vec<Vec<u8>> = vec![];
 
         loop {
@@ -64,18 +74,18 @@ impl DbinFile {
                 Err(err) => {
                     if err.kind() == std::io::ErrorKind::UnexpectedEof {
                         return Ok(DbinFile {
-                            version,
-                            content_type,
-                            content_version,
+                            version: dbin_header.version,
+                            content_type: dbin_header.content_type,
+                            content_version: dbin_header.content_version,
                             messages,
                         });
                     } else if err.kind() == std::io::ErrorKind::Other {
                         // Check that version, content_type, and content_version match the previous header
-                        let (new_version, new_content_type, new_content_version) =
+                        let dbin_header_new =
                             Self::read_partial_header(read)?;
-                        if version != new_version
-                            || content_type != new_content_type
-                            || content_version != new_content_version
+                        if dbin_header.version != dbin_header_new.version
+                            || dbin_header.content_type != dbin_header_new.content_type
+                            || dbin_header.content_version != dbin_header_new.content_version
                         {
                             return Err(DbinFileError::DifferingDBINVersions);
                         }
@@ -86,6 +96,46 @@ impl DbinFile {
             }
         }
     }
+
+    pub fn try_from_read_concat<R: Read>(read: &mut R, buffered_header: &mut Option<DbinHeader>) -> Result<DbinFile, DbinFileError> {
+        let dbin_header = if let Some(header) = buffered_header.take() {
+            // Use the buffered header if available
+            header
+        } else {
+            // Otherwise, read a new header
+            Self::read_header(read)?
+        };
+    
+        let mut messages: Vec<Vec<u8>> = vec![];
+    
+        loop {
+            match Self::read_message(read) {
+                Ok(message) => messages.push(message),
+                Err(err) => {
+                    if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                        return Ok(DbinFile {
+                            version: dbin_header.version,
+                            content_type: dbin_header.content_type,
+                            content_version: dbin_header.content_version,
+                            messages,
+                        });
+                    } else if err.kind() == std::io::ErrorKind::Other {
+                        // We've encountered the start of a new DBIN file
+                        *buffered_header = Some(Self::read_partial_header(read)?);
+                        return Ok(DbinFile {
+                            version: dbin_header.version,
+                            content_type: dbin_header.content_type,
+                            content_version: dbin_header.content_version,
+                            messages,
+                        });
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
+    }
+    
 }
 
 impl DbinFile {
