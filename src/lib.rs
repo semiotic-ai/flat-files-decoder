@@ -16,7 +16,8 @@ use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
 use dbin::{DbinFile, DbinHeader};
 use protobuf::{Message, MessageField};
-use protos::block::{Block, BlockHeader};
+use protos::block::{Block, BlockHeader, transaction_trace, TransactionTrace, Call};
+use protos::bstream::Block as BlockStream;
 use rayon::prelude::*;
 use receipts::check_receipt_root;
 use serde::{Deserialize, Serialize};
@@ -226,57 +227,53 @@ fn handle_block_header(message: &Vec<u8>) -> Result<MessageField<BlockHeader>, D
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer
 pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W) -> Result<(), DecodeError> {
-    let mut buffered_header: Option<DbinHeader> = None;
     loop {
-        match DbinFile::try_from_read_concat(&mut reader, &mut buffered_header) {
-            Ok(dbin_file) => {
-                for message in dbin_file.messages {
-                    let message: protos::bstream::Block = Message::parse_from_bytes(&message)
-                        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-        
-                    let block: Block = Message::parse_from_bytes(&message.payload_buffer)
-                        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-        
-                    if block.number != 0 {
-                        let valid_receipts = check_receipt_root(&block);
-                        match valid_receipts {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!("Invalid receipt root: {}", err);
-                                continue;
-                            }
-                        }
-                        let valid_transactions = check_transaction_root(&block);
-                        match valid_transactions {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!("Invalid transaction root: {}", err);
-                                continue;
-                            }
+        match DbinFile::read_message_stream(&mut reader) {
+            Ok(message) => {
+                let block_stream = BlockStream::parse_from_bytes(&message)
+                    .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+                let block= Block::parse_from_bytes(&block_stream.payload_buffer)
+                    .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+                if block.number != 0 {
+                    let valid_receipts = check_receipt_root(&block);
+                    match valid_receipts {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::error!("Invalid receipt root: {}", err);
+                            continue;
                         }
                     }
-        
-                    let header_record_with_number = HeaderRecordWithNumber {
-                        block_hash: block.hash,
-                        total_difficulty: block
-                            .header
-                            .total_difficulty
-                            .as_ref()
-                            .ok_or(DecodeError::InvalidInput)?
-                            .bytes
-                            .clone(),
-                        block_number: block.number,
-                    };
-                    
-                    let header_record_bin = bincode::serialize(&header_record_with_number)
-                        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-                 
-                    let size = header_record_bin.len() as u32;
-                    writer.write_all(&size.to_be_bytes())?;
-                    writer.write_all(&header_record_bin)?;
-
-                    writer.flush().map_err(DecodeError::IoError)?;
+                    let valid_transactions = check_transaction_root(&block);
+                    match valid_transactions {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::error!("Invalid transaction root: {}", err);
+                            continue;
+                        }
+                    }
                 }
+    
+                let header_record_with_number = HeaderRecordWithNumber {
+                    block_hash: block.hash,
+                    total_difficulty: block
+                        .header
+                        .total_difficulty
+                        .as_ref()
+                        .ok_or(DecodeError::InvalidInput)?
+                        .bytes
+                        .clone(),
+                    block_number: block.number,
+                };
+                
+                let header_record_bin = bincode::serialize(&header_record_with_number)
+                    .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+                
+                let size = header_record_bin.len() as u32;
+                writer.write_all(&size.to_be_bytes())?;
+                writer.write_all(&header_record_bin)?;
+
+                writer.flush().map_err(DecodeError::IoError)?;
             }
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break, // No more DBIN files
             Err(e) => {

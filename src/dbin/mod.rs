@@ -150,6 +150,19 @@ impl DbinFile {
         Ok(Self::read_content(size, read)?)
     }
 
+    pub fn read_message_stream<R: Read>(read: &mut R) -> Result<Vec<u8>, DbinFileError> {
+        let mut size: [u8; 4] = [0; 4];
+        read.read_exact(&mut size)?;
+
+        if &size == b"dbin" {
+            _ = Self::read_partial_header(read)?;
+            size = [0; 4];
+            read.read_exact(&mut size)?;    
+        }
+
+        Ok(Self::read_content(size, read)?)
+    }
+
     fn read_content<R: Read>(size: [u8; 4], read: &mut R) -> Result<Vec<u8>, std::io::Error> {
         let size = u32::from_be_bytes(size);
         let mut content: Vec<u8> = vec![0; size as usize];
