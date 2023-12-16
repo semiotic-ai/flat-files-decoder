@@ -12,7 +12,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Stream data continuously
-    Stream{
+    Stream {
         #[clap(short, long, default_value = "false")]
         decompress: bool,
     },
@@ -34,18 +34,21 @@ fn main() {
         Commands::Stream { decompress } => {
             if decompress {
                 // zst decompress first
-                let reader = zstd::stream::Decoder::new(io::stdin()).expect("Failed to create zstd decoder");
+                let reader =
+                    zstd::stream::Decoder::new(io::stdin()).expect("Failed to create zstd decoder");
                 let writer = BufWriter::new(io::stdout().lock());
                 stream_blocks(reader, writer).expect("Failed to stream blocks");
-            }
-            else {
+            } else {
                 let reader = BufReader::with_capacity(64 * 2 << 20, io::stdin().lock());
                 let writer = BufWriter::new(io::stdout().lock());
                 stream_blocks(reader, writer).expect("Failed to stream blocks");
             }
-            
         }
-        Commands::Decode { input, headers_dir, output } => {
+        Commands::Decode {
+            input,
+            headers_dir,
+            output,
+        } => {
             let input = match input {
                 Some(input) => decoder::DecodeInput::Path(input),
                 None => decoder::DecodeInput::Reader(Box::new(BufReader::new(io::stdin()))),

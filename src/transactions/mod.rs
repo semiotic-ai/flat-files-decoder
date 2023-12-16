@@ -6,7 +6,7 @@ mod signature;
 mod transaction;
 mod transaction_signed;
 
-use crate::protos::block::{BigInt, Block};
+use crate::sf::ethereum::r#type::v2::{BigInt, Block};
 use crate::transactions::error::TransactionError;
 use reth_primitives::proofs::calculate_transaction_root;
 use reth_primitives::{hex, TransactionSigned, U128};
@@ -21,10 +21,15 @@ pub fn check_transaction_root(block: &Block) -> Result<(), TransactionError> {
 
     let tx_root = calculate_transaction_root(&transactions);
 
-    if tx_root.as_bytes() != block.header.transactions_root.as_slice() {
+    let block_header = match block.header {
+        Some(ref header) => header,
+        None => return Err(TransactionError::MissingHeader),
+    };
+
+    if tx_root.as_bytes() != block_header.transactions_root.as_slice() {
         return Err(TransactionError::MismatchedRoot(
             hex::encode(tx_root.as_bytes()),
-            hex::encode(block.header.transactions_root.as_slice()),
+            hex::encode(block_header.transactions_root.as_slice()),
         ));
     }
 
@@ -45,10 +50,10 @@ impl TryFrom<BigInt> for u128 {
 #[cfg(test)]
 mod tests {
     use crate::dbin::DbinFile;
-    use crate::protos;
-    use crate::protos::block::transaction_trace::Type;
-    use crate::protos::block::{BigInt, Block};
-    use protobuf::Message;
+    use crate::sf::ethereum::r#type::v2::transaction_trace::Type;
+    use crate::sf::bstream::v1::Block as BstreamBlock;
+    use crate::sf::ethereum::r#type::v2::{BigInt, Block};
+    use prost::Message;
     use reth_primitives::{
         Address, Bytes, TransactionKind, TransactionSigned, TxHash, TxType, U256,
     };
@@ -61,8 +66,9 @@ mod tests {
         let n_u128: u128 = 12345678910;
         let n_bytes: [u8; 16] = n_u128.to_be_bytes();
 
-        let mut bigint = BigInt::new();
-        bigint.bytes = n_bytes.to_vec();
+        let bigint = BigInt {
+            bytes: n_bytes.to_vec(),
+        };
 
         let new_u128: u128 = bigint.try_into().unwrap();
         assert_eq!(new_u128, n_u128);
@@ -76,9 +82,9 @@ mod tests {
 
         let message = dbin_file.messages.first().unwrap();
 
-        let message: protos::bstream::Block = Message::parse_from_bytes(&message).unwrap();
+        let message = BstreamBlock::decode(message.as_slice()).unwrap();
 
-        let block: Block = Message::parse_from_bytes(&message.payload_buffer).unwrap();
+        let block = Block::decode(message.payload_buffer.as_slice()).unwrap();
 
         let trace = block.transaction_traces.first().unwrap();
 
@@ -143,14 +149,14 @@ mod tests {
 
         let message = dbin_file.messages.first().unwrap();
 
-        let message: protos::bstream::Block = Message::parse_from_bytes(&message).unwrap();
+        let message = BstreamBlock::decode(message.as_slice()).unwrap();
 
-        let block: Block = Message::parse_from_bytes(&message.payload_buffer).unwrap();
+        let block = Block::decode(message.payload_buffer.as_slice()).unwrap();
 
         let trace = block
             .transaction_traces
             .iter()
-            .filter(|t| t.type_.unwrap() == Type::TRX_TYPE_LEGACY)
+            .filter(|t| Type::try_from(t.r#type).unwrap() == Type::TrxTypeLegacy)
             .next()
             .unwrap();
 
@@ -189,9 +195,9 @@ mod tests {
 
         let message = dbin_file.messages.first().unwrap();
 
-        let message: protos::bstream::Block = Message::parse_from_bytes(&message).unwrap();
+        let message = BstreamBlock::decode(message.as_slice()).unwrap();
 
-        let block: Block = Message::parse_from_bytes(&message.payload_buffer).unwrap();
+        let block = Block::decode(message.payload_buffer.as_slice()).unwrap();
 
         let trace = block
             .transaction_traces

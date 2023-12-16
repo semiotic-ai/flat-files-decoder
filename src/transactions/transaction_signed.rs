@@ -1,10 +1,8 @@
-use std::str::FromStr;
-
-use crate::protos::block::{BigInt, TransactionTrace};
+use crate::sf::ethereum::r#type::v2::TransactionTrace;
 use crate::transactions::error::TransactionError;
-use protobuf::MessageField;
 use reth_primitives::{Signature, Transaction, TransactionSigned};
 use revm_primitives::{hex, B256};
+use std::str::FromStr;
 
 impl TryFrom<&TransactionTrace> for TransactionSigned {
     type Error = TransactionError;
@@ -21,8 +19,4 @@ impl TryFrom<&TransactionTrace> for TransactionSigned {
         };
         Ok(tx_signed)
     }
-}
-
-pub fn u128_from_field(field: &MessageField<BigInt>) -> Result<u128, TransactionError> {
-    field.get_or_default().clone().try_into()
 }

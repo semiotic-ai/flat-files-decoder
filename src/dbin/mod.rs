@@ -27,9 +27,7 @@ impl DbinFile {
         Ok(dbin_header)
     }
 
-    pub fn read_partial_header<R: Read>(
-        read: &mut R,
-    ) -> Result<DbinHeader, DbinFileError> {
+    pub fn read_partial_header<R: Read>(read: &mut R) -> Result<DbinHeader, DbinFileError> {
         let version;
         let content_type;
         let content_version;
@@ -81,8 +79,7 @@ impl DbinFile {
                         });
                     } else if err.kind() == std::io::ErrorKind::Other {
                         // Check that version, content_type, and content_version match the previous header
-                        let dbin_header_new =
-                            Self::read_partial_header(read)?;
+                        let dbin_header_new = Self::read_partial_header(read)?;
                         if dbin_header.version != dbin_header_new.version
                             || dbin_header.content_type != dbin_header_new.content_type
                             || dbin_header.content_version != dbin_header_new.content_version
@@ -97,7 +94,10 @@ impl DbinFile {
         }
     }
 
-    pub fn try_from_read_concat<R: Read>(read: &mut R, buffered_header: &mut Option<DbinHeader>) -> Result<DbinFile, DbinFileError> {
+    pub fn try_from_read_concat<R: Read>(
+        read: &mut R,
+        buffered_header: &mut Option<DbinHeader>,
+    ) -> Result<DbinFile, DbinFileError> {
         let dbin_header = if let Some(header) = buffered_header.take() {
             // Use the buffered header if available
             header
@@ -105,9 +105,9 @@ impl DbinFile {
             // Otherwise, read a new header
             Self::read_header(read)?
         };
-    
+
         let mut messages: Vec<Vec<u8>> = vec![];
-    
+
         loop {
             match Self::read_message(read) {
                 Ok(message) => messages.push(message),
@@ -135,7 +135,6 @@ impl DbinFile {
             }
         }
     }
-    
 }
 
 impl DbinFile {
@@ -157,7 +156,7 @@ impl DbinFile {
         if &size == b"dbin" {
             _ = Self::read_partial_header(read)?;
             size = [0; 4];
-            read.read_exact(&mut size)?;    
+            read.read_exact(&mut size)?;
         }
 
         Ok(Self::read_content(size, read)?)
