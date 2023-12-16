@@ -310,6 +310,7 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block:
             }
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => 
                 if block_number < end_block {
+                    log::info!("Reached end of file, waiting for more blocks");
                     continue; // More blocks to read
                 } else {
                     break; // read all the blocks
