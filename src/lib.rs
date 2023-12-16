@@ -26,8 +26,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::path::PathBuf;
 
-// sf.ethereum.type.v2
-// sf.bstream.v1
 pub mod sf {
     pub mod ethereum {
         pub mod r#type {
@@ -42,6 +40,8 @@ pub mod sf {
         }
     }
 }
+
+const MERGE_BLOCK: usize = 15537393;
 
 pub enum DecodeInput {
     Path(String),
@@ -248,7 +248,12 @@ fn handle_block_header(message: &Vec<u8>) -> Result<BlockHeader, DecodeError> {
 
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer
-pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W) -> Result<(), DecodeError> {
+pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block: Option<usize>) -> Result<(), DecodeError> {
+    let end_block = match end_block {
+        Some(end_block) => end_block,
+        None => MERGE_BLOCK,
+    };
+    let mut block_number = 0;
     loop {
         match DbinFile::read_message_stream(&mut reader) {
             Ok(message) => {
@@ -257,12 +262,7 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W) -> Result<
                 let block =
                     sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
                         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-
-                // let block_stream = BlockStream::parse_from_bytes(&message)
-                //     .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-                // let block= Block::parse_from_bytes(&block_stream.payload_buffer)
-                //     .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-
+                block_number = block.number as usize;
                 if block.number != 0 {
                     let valid_receipts = check_receipt_root(&block);
                     match valid_receipts {
@@ -308,7 +308,12 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W) -> Result<
 
                 writer.flush().map_err(DecodeError::IoError)?;
             }
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break, // No more DBIN files
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => 
+                if block_number < end_block {
+                    continue; // More blocks to read
+                } else {
+                    break; // read all the blocks
+                 } 
             Err(e) => {
                 log::error!("Error reading DBIN file: {}", e);
                 break;
