@@ -18,7 +18,7 @@ impl TryFrom<&TransactionTrace> for Transaction {
         let nonce = trace.nonce;
         let trace_gas_price = match trace.gas_price.clone() {
             Some(gas_price) => gas_price,
-            None => return Err(TransactionError::MissingGasPrice),
+            None => BigInt{bytes: vec![0]},
         };
         let gas_price = trace_gas_price.try_into()?;
         let gas_limit = trace.gas_limit;
@@ -73,7 +73,7 @@ impl TryFrom<&TransactionTrace> for Transaction {
 
                 let trace_max_fee_per_gas = match trace.max_fee_per_gas.clone() {
                     Some(max_fee_per_gas) => max_fee_per_gas,
-                    None => return Err(TransactionError::MissingMaxFeePerGas),
+                    None => BigInt{bytes: vec![0]},
                 };
                 let max_fee_per_gas = trace_max_fee_per_gas.try_into()?;
 
