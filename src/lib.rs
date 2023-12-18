@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sf::bstream::v1::Block as BstreamBlock;
 use sf::ethereum::r#type::v2::{Block, BlockHeader};
 use simple_log::log;
+use tokio::join;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
@@ -301,21 +302,9 @@ pub async fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_
                             }
                         }
                     });
-                    
-                    match receipts_check_process.await {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Receipts check process failed: {}", err);
-                            continue;
-                        }
-                    }
-                    match transactions_check_process.await {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Transactions check process failed: {}", err);
-                            continue;
-                        }
-                    }
+                    let joint_return = join![receipts_check_process, transactions_check_process];
+                    joint_return.0.map_err(|err| DecodeError::JoinError(err))?;
+                    joint_return.1.map_err(|err| DecodeError::JoinError(err))?;
                 }
 
                 let header_record_bin = bincode::serialize(&header_record_with_number)

@@ -3,6 +3,7 @@ use crate::headers::error::BlockHeaderError;
 use crate::receipts::error::ReceiptError;
 use crate::transactions::error::TransactionError;
 use thiserror::Error;
+use tokio::task::JoinError;
 
 #[derive(Debug, Error)]
 pub enum DecodeError {
@@ -22,4 +23,6 @@ pub enum DecodeError {
     InvalidContentType(String),
     #[error("Invalid protobuf: {0}")]
     ProtobufError(String),
+    #[error("Join error: {0}")]
+    JoinError(JoinError),
 }
