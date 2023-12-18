@@ -1,5 +1,5 @@
 // use crate::protos::block::{CallType, TransactionTrace};
-use crate::sf::ethereum::r#type::v2::{CallType, TransactionTrace, BigInt};
+use crate::sf::ethereum::r#type::v2::{BigInt, CallType, TransactionTrace};
 use crate::transactions::access_list::compute_access_list;
 use crate::transactions::error::TransactionError;
 use crate::transactions::tx_type::map_tx_type;
@@ -18,7 +18,7 @@ impl TryFrom<&TransactionTrace> for Transaction {
         let nonce = trace.nonce;
         let trace_gas_price = match trace.gas_price.clone() {
             Some(gas_price) => gas_price,
-            None => BigInt{bytes: vec![0]},
+            None => BigInt { bytes: vec![0] },
         };
         let gas_price = trace_gas_price.try_into()?;
         let gas_limit = trace.gas_limit;
@@ -29,7 +29,7 @@ impl TryFrom<&TransactionTrace> for Transaction {
 
         let trace_value = match trace.value.clone() {
             Some(value) => value,
-            None => BigInt{bytes: vec![0]},
+            None => BigInt { bytes: vec![0] },
         };
         let value = trace_value.try_into()?;
         let input = Bytes::from(trace.input.as_slice());
@@ -73,13 +73,13 @@ impl TryFrom<&TransactionTrace> for Transaction {
 
                 let trace_max_fee_per_gas = match trace.max_fee_per_gas.clone() {
                     Some(max_fee_per_gas) => max_fee_per_gas,
-                    None => BigInt{bytes: vec![0]},
+                    None => BigInt { bytes: vec![0] },
                 };
                 let max_fee_per_gas = trace_max_fee_per_gas.try_into()?;
 
                 let trace_max_priority_fee_per_gas = match trace.max_priority_fee_per_gas.clone() {
                     Some(max_priority_fee_per_gas) => max_priority_fee_per_gas,
-                    None => BigInt{bytes: vec![0]},
+                    None => BigInt { bytes: vec![0] },
                 };
                 let max_priority_fee_per_gas = trace_max_priority_fee_per_gas.try_into()?;
 

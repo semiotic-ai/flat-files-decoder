@@ -21,11 +21,11 @@ use serde::{Deserialize, Serialize};
 use sf::bstream::v1::Block as BstreamBlock;
 use sf::ethereum::r#type::v2::{Block, BlockHeader};
 use simple_log::log;
-use tokio::join;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read, Write};
 use std::path::PathBuf;
+use tokio::join;
 
 pub mod sf {
     pub mod ethereum {
@@ -249,7 +249,11 @@ fn handle_block_header(message: &Vec<u8>) -> Result<BlockHeader, DecodeError> {
 
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer
-pub async fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block: Option<usize>) -> Result<(), DecodeError> {
+pub async fn stream_blocks<R: Read, W: Write>(
+    mut reader: R,
+    mut writer: W,
+    end_block: Option<usize>,
+) -> Result<(), DecodeError> {
     let end_block = match end_block {
         Some(end_block) => end_block,
         None => MERGE_BLOCK,
@@ -292,7 +296,7 @@ pub async fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_
                             }
                         }
                     });
-                    
+
                     let transactions_check_process = tokio::task::spawn_blocking(move || {
                         let valid_transactions = check_transaction_root(&block);
                         match valid_transactions {
@@ -315,13 +319,14 @@ pub async fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_
                 writer.write_all(&header_record_bin)?;
                 writer.flush().map_err(DecodeError::IoError)?;
             }
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => 
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                 if block_number < end_block {
                     log::info!("Reached end of file, waiting for more blocks");
                     continue; // More blocks to read
                 } else {
                     break; // read all the blocks
-                 } 
+                }
+            }
             Err(e) => {
                 log::error!("Error reading DBIN file: {}", e);
                 break;

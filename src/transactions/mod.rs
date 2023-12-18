@@ -50,8 +50,8 @@ impl TryFrom<BigInt> for u128 {
 #[cfg(test)]
 mod tests {
     use crate::dbin::DbinFile;
-    use crate::sf::ethereum::r#type::v2::transaction_trace::Type;
     use crate::sf::bstream::v1::Block as BstreamBlock;
+    use crate::sf::ethereum::r#type::v2::transaction_trace::Type;
     use crate::sf::ethereum::r#type::v2::{BigInt, Block};
     use prost::Message;
     use reth_primitives::{
