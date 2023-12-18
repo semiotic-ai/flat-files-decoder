@@ -248,7 +248,7 @@ fn handle_block_header(message: &Vec<u8>) -> Result<BlockHeader, DecodeError> {
 
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer
-pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block: Option<usize>) -> Result<(), DecodeError> {
+pub async fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block: Option<usize>) -> Result<(), DecodeError> {
     let end_block = match end_block {
         Some(end_block) => end_block,
         None => MERGE_BLOCK,
@@ -263,25 +263,7 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block:
                     sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
                         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
                 block_number = block.number as usize;
-                if block.number != 0 {
-                    let valid_receipts = check_receipt_root(&block);
-                    match valid_receipts {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Invalid receipt root: {}", err);
-                            continue;
-                        }
-                    }
-                    let valid_transactions = check_transaction_root(&block);
-                    match valid_transactions {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Invalid transaction root: {}", err);
-                            continue;
-                        }
-                    }
-                }
-                let block_header = match block.header {
+                let block_header = match block.header.clone() {
                     Some(header) => header,
                     None => {
                         log::error!("Block header is missing");
@@ -289,7 +271,7 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block:
                     }
                 };
                 let header_record_with_number = HeaderRecordWithNumber {
-                    block_hash: block.hash,
+                    block_hash: block.hash.clone(),
                     total_difficulty: block_header
                         .total_difficulty
                         .as_ref()
@@ -298,6 +280,43 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block:
                         .clone(),
                     block_number: block.number,
                 };
+                if block.number != 0 {
+                    let block_clone = block.clone();
+                    let receipts_check_process = tokio::task::spawn_blocking(move || {
+                        let valid_receipts = check_receipt_root(&block_clone);
+                        match valid_receipts {
+                            Ok(_) => {}
+                            Err(err) => {
+                                log::error!("Invalid receipt root: {}", err);
+                            }
+                        }
+                    });
+                    
+                    let transactions_check_process = tokio::task::spawn_blocking(move || {
+                        let valid_transactions = check_transaction_root(&block);
+                        match valid_transactions {
+                            Ok(_) => {}
+                            Err(err) => {
+                                log::error!("Invalid transaction root: {}", err);
+                            }
+                        }
+                    });
+                    
+                    match receipts_check_process.await {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::error!("Receipts check process failed: {}", err);
+                            continue;
+                        }
+                    }
+                    match transactions_check_process.await {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::error!("Transactions check process failed: {}", err);
+                            continue;
+                        }
+                    }
+                }
 
                 let header_record_bin = bincode::serialize(&header_record_with_number)
                     .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
@@ -305,7 +324,6 @@ pub fn stream_blocks<R: Read, W: Write>(mut reader: R, mut writer: W, end_block:
                 let size = header_record_bin.len() as u32;
                 writer.write_all(&size.to_be_bytes())?;
                 writer.write_all(&header_record_bin)?;
-
                 writer.flush().map_err(DecodeError::IoError)?;
             }
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => 

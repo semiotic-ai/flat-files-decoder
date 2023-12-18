@@ -1136,6 +1136,7 @@ dependencies = [
  "serde_json",
  "simple-log",
  "thiserror",
+ "tokio",
  "zstd 0.13.0",
 ]
 

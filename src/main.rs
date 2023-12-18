@@ -28,8 +28,8 @@ enum Commands {
         output: Option<String>,
     },
 }
-
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     match cli.command {
@@ -39,11 +39,11 @@ fn main() {
                 let reader =
                     zstd::stream::Decoder::new(io::stdin()).expect("Failed to create zstd decoder");
                 let writer = BufWriter::new(io::stdout().lock());
-                stream_blocks(reader, writer, end_block).expect("Failed to stream blocks");
+                stream_blocks(reader, writer, end_block).await.expect("Failed to stream blocks");
             } else {
                 let reader = BufReader::with_capacity(64 * 2 << 20, io::stdin().lock());
                 let writer = BufWriter::new(io::stdout().lock());
-                stream_blocks(reader, writer, end_block).expect("Failed to stream blocks");
+                stream_blocks(reader, writer, end_block).await.expect("Failed to stream blocks");
             }
         }
         Commands::Decode {
