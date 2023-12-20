@@ -171,11 +171,7 @@ fn handle_block(
     output: Option<&str>,
     headers_dir: Option<&str>,
 ) -> Result<Block, DecodeError> {
-    let message = BstreamBlock::decode(message.as_slice())
-        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-
-    let block = Block::decode(message.payload_buffer.as_slice())
-        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+    let block = decode_block_from_bytes(message)?;
 
     if let Some(headers_dir) = headers_dir {
         check_valid_header(&block, headers_dir)?;
@@ -229,12 +225,7 @@ pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError>
 }
 
 fn handle_block_header(message: &Vec<u8>) -> Result<BlockHeader, DecodeError> {
-    let message = BstreamBlock::decode(message.as_slice())
-        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-
-    let block = Block::decode(message.payload_buffer.as_slice())
-        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-
+    let block = decode_block_from_bytes(message)?;
     if block.number != 0 {
         check_receipt_root(&block)?;
         check_transaction_root(&block)?;
@@ -264,11 +255,7 @@ pub async fn stream_blocks<R: Read, W: Write>(
     loop {
         match DbinFile::read_message_stream(&mut reader) {
             Ok(message) => {
-                let block_stream = sf::bstream::v1::Block::decode(message.as_slice())
-                    .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-                let block =
-                    sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
-                        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+                let block = decode_block_from_bytes(&message)?;
                 block_number = block.number as usize;
 
                 if block_number != 0 {
@@ -324,6 +311,14 @@ pub async fn stream_blocks<R: Read, W: Write>(
     Ok(())
 }
 
+fn decode_block_from_bytes(bytes: &Vec<u8>) -> Result<Block, DecodeError> {
+    let block_stream = sf::bstream::v1::Block::decode(bytes.as_slice())
+        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+    let block =
+        sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
+            .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+    Ok(block)
+}
 
 #[cfg(test)]
 mod tests {
