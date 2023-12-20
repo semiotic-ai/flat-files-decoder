@@ -93,48 +93,6 @@ impl DbinFile {
             }
         }
     }
-
-    pub fn try_from_read_concat<R: Read>(
-        read: &mut R,
-        buffered_header: &mut Option<DbinHeader>,
-    ) -> Result<DbinFile, DbinFileError> {
-        let dbin_header = if let Some(header) = buffered_header.take() {
-            // Use the buffered header if available
-            header
-        } else {
-            // Otherwise, read a new header
-            Self::read_header(read)?
-        };
-
-        let mut messages: Vec<Vec<u8>> = vec![];
-
-        loop {
-            match Self::read_message(read) {
-                Ok(message) => messages.push(message),
-                Err(err) => {
-                    if err.kind() == std::io::ErrorKind::UnexpectedEof {
-                        return Ok(DbinFile {
-                            version: dbin_header.version,
-                            content_type: dbin_header.content_type,
-                            content_version: dbin_header.content_version,
-                            messages,
-                        });
-                    } else if err.kind() == std::io::ErrorKind::Other {
-                        // We've encountered the start of a new DBIN file
-                        *buffered_header = Some(Self::read_partial_header(read)?);
-                        return Ok(DbinFile {
-                            version: dbin_header.version,
-                            content_type: dbin_header.content_type,
-                            content_version: dbin_header.content_version,
-                            messages,
-                        });
-                    } else {
-                        return Err(err);
-                    }
-                }
-            }
-        }
-    }
 }
 
 impl DbinFile {
