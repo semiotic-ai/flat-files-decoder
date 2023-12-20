@@ -12,8 +12,10 @@ pub mod transactions;
 
 use crate::error::DecodeError;
 use crate::headers::check_valid_header;
+use crate::headers::error::BlockHeaderError;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
+use headers::HeaderRecordWithNumber;
 use prost::Message;
 use rayon::prelude::*;
 use receipts::check_receipt_root;
@@ -268,24 +270,8 @@ pub async fn stream_blocks<R: Read, W: Write>(
                     sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
                         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
                 block_number = block.number as usize;
-                let block_header = match block.header.clone() {
-                    Some(header) => header,
-                    None => {
-                        log::error!("Block header is missing");
-                        continue;
-                    }
-                };
-                let header_record_with_number = HeaderRecordWithNumber {
-                    block_hash: block.hash.clone(),
-                    total_difficulty: block_header
-                        .total_difficulty
-                        .as_ref()
-                        .ok_or(DecodeError::InvalidInput)?
-                        .bytes
-                        .clone(),
-                    block_number: block.number,
-                };
-                if block.number != 0 {
+
+                if block_number != 0 {
                     let block_clone = block.clone();
                     let receipts_check_process = tokio::task::spawn_blocking(move || {
                         let valid_receipts = check_receipt_root(&block_clone);
@@ -297,8 +283,9 @@ pub async fn stream_blocks<R: Read, W: Write>(
                         }
                     });
 
+                    let block_clone = block.clone();
                     let transactions_check_process = tokio::task::spawn_blocking(move || {
-                        let valid_transactions = check_transaction_root(&block);
+                        let valid_transactions = check_transaction_root(&block_clone);
                         match valid_transactions {
                             Ok(_) => {}
                             Err(err) => {
@@ -311,6 +298,7 @@ pub async fn stream_blocks<R: Read, W: Write>(
                     joint_return.1.map_err(|err| DecodeError::JoinError(err))?;
                 }
 
+                let header_record_with_number = HeaderRecordWithNumber::try_from(block)?;
                 let header_record_bin = bincode::serialize(&header_record_with_number)
                     .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
 
@@ -336,12 +324,7 @@ pub async fn stream_blocks<R: Read, W: Write>(
     Ok(())
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct HeaderRecordWithNumber {
-    pub block_hash: Vec<u8>,
-    pub total_difficulty: Vec<u8>,
-    pub block_number: u64,
-}
+
 #[cfg(test)]
 mod tests {
     use prost::Message;

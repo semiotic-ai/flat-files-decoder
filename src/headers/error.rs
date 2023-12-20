@@ -13,4 +13,6 @@ pub enum BlockHeaderError {
     MismatchedRoots(BlockHeaderRoots, BlockHeaderRoots),
     #[error("Missing header")]
     MissingHeader,
+    #[error("Invalid total difficulty")]
+    InvalidTotalDifficulty,
 }
