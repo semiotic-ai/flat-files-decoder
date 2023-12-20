@@ -17,7 +17,7 @@ pub struct DbinHeader {
 }
 
 impl DbinFile {
-    pub fn read_header<R: Read>(read: &mut R) -> Result<DbinHeader, DbinFileError> {
+    fn read_header<R: Read>(read: &mut R) -> Result<DbinHeader, DbinFileError> {
         let mut buf: [u8; 4] = [0; 4];
         read.read_exact(&mut buf)
             .map_err(DbinFileError::ReadError)?;
@@ -27,7 +27,7 @@ impl DbinFile {
         Ok(dbin_header)
     }
 
-    pub fn read_partial_header<R: Read>(read: &mut R) -> Result<DbinHeader, DbinFileError> {
+    fn read_partial_header<R: Read>(read: &mut R) -> Result<DbinHeader, DbinFileError> {
         let version;
         let content_type;
         let content_version;
