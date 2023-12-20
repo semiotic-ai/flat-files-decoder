@@ -61,30 +61,22 @@ pub enum DecodeInput {
 * If output is not provided, the decoded blocks will not be written to disk.
 **/
 pub fn decode_flat_files(
-    input: DecodeInput,
+    input: String,
     output: Option<&str>,
     headers_dir: Option<&str>,
 ) -> Result<Vec<Block>, DecodeError> {
-    match input {
-        DecodeInput::Path(input) => {
-            let metadata = fs::metadata(&input).map_err(DecodeError::IoError)?;
+    let metadata = fs::metadata(&input).map_err(DecodeError::IoError)?;
 
-            if let Some(output) = output {
-                fs::create_dir_all(output).map_err(DecodeError::IoError)?;
-            }
+    if let Some(output) = output {
+        fs::create_dir_all(output).map_err(DecodeError::IoError)?;
+    }
 
-            if metadata.is_dir() {
-                decode_flat_files_dir(&input, output, headers_dir)
-            } else if metadata.is_file() {
-                handle_file(&PathBuf::from(input), output, headers_dir)
-            } else {
-                Err(DecodeError::InvalidInput)
-            }
-        }
-        DecodeInput::Reader(reader) => {
-            let blocks = extract_blocks(reader)?;
-            Ok(blocks)
-        }
+    if metadata.is_dir() {
+        decode_flat_files_dir(&input, output, headers_dir)
+    } else if metadata.is_file() {
+        handle_file(&PathBuf::from(input), output, headers_dir)
+    } else {
+        Err(DecodeError::InvalidInput)
     }
 }
 
@@ -196,20 +188,6 @@ fn handle_block(
     Ok(block)
 }
 
-pub fn extract_block_headers<R: Read + BufRead>(
-    mut reader: R,
-) -> Result<Vec<BlockHeader>, DecodeError> {
-    log::debug!("Reading messages");
-    let dbin_file = DbinFile::try_from_read(&mut reader)?;
-    log::debug!("Validating blocks");
-
-    // Parallel processing of block headers
-    dbin_file
-        .messages
-        .par_iter()
-        .map(|message| handle_block_header(message))
-        .collect()
-}
 
 pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError> {
     log::debug!("Reading messages");
@@ -224,21 +202,6 @@ pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError>
         .collect()
 }
 
-fn handle_block_header(message: &Vec<u8>) -> Result<BlockHeader, DecodeError> {
-    let block = decode_block_from_bytes(message)?;
-    if block.number != 0 {
-        check_receipt_root(&block)?;
-        check_transaction_root(&block)?;
-    }
-    let block_header = match { block.header } {
-        Some(header) => header,
-        None => {
-            log::error!("Block header is missing");
-            return Err(DecodeError::InvalidInput);
-        }
-    };
-    Ok(block_header)
-}
 
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer

@@ -21,7 +21,7 @@ enum Commands {
     /// Decode files from input to output
     Decode {
         #[clap(short, long)]
-        input: Option<String>,
+        input: String,
         #[clap(long)]
         headers_dir: Option<String>,
         #[clap(short, long)]
@@ -58,11 +58,6 @@ async fn main() {
             headers_dir,
             output,
         } => {
-            let input = match input {
-                Some(input) => decoder::DecodeInput::Path(input),
-                None => decoder::DecodeInput::Reader(Box::new(BufReader::new(io::stdin()))),
-            };
-
             let blocks = decode_flat_files(input, output.as_deref(), headers_dir.as_deref())
                 .expect("Failed to decode files");
 
