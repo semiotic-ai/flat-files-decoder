@@ -6,26 +6,23 @@
 
 pub mod dbin;
 pub mod error;
-mod headers;
+pub mod headers;
 pub mod receipts;
 pub mod transactions;
 
 use crate::error::DecodeError;
 use crate::headers::check_valid_header;
-use crate::headers::error::BlockHeaderError;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
 use headers::HeaderRecordWithNumber;
 use prost::Message;
 use rayon::prelude::*;
 use receipts::check_receipt_root;
-use serde::{Deserialize, Serialize};
-use sf::bstream::v1::Block as BstreamBlock;
-use sf::ethereum::r#type::v2::{Block, BlockHeader};
+use sf::ethereum::r#type::v2::Block;
 use simple_log::log;
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read, Write};
+use std::io::{BufReader, Cursor, Read, Write};
 use std::path::PathBuf;
 use tokio::join;
 
@@ -188,7 +185,6 @@ fn handle_block(
     Ok(block)
 }
 
-
 pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError> {
     log::debug!("Reading messages");
     let dbin_file = DbinFile::try_from_read(&mut reader)?;
@@ -201,7 +197,6 @@ pub fn extract_blocks<R: Read>(mut reader: R) -> Result<Vec<Block>, DecodeError>
         .map(|message| handle_block(message, None, None))
         .collect()
 }
-
 
 // pub fn stream_blocks<R: Read, W: Write>()
 // A function which decodes blocks from a reader and writes them, serialized, to a writer
@@ -277,9 +272,8 @@ pub async fn stream_blocks<R: Read, W: Write>(
 fn decode_block_from_bytes(bytes: &Vec<u8>) -> Result<Block, DecodeError> {
     let block_stream = sf::bstream::v1::Block::decode(bytes.as_slice())
         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
-    let block =
-        sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
-            .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+    let block = sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
+        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
     Ok(block)
 }
 
