@@ -4,11 +4,11 @@
 //! provided in the block header. Optionally, the verifier can also check the block headers
 //! against a directory of block headers in json format.
 
-mod dbin;
+pub mod dbin;
 pub mod error;
 mod headers;
-mod receipts;
-mod transactions;
+pub mod receipts;
+pub mod transactions;
 
 use crate::error::DecodeError;
 use crate::headers::check_valid_header;

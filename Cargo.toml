@@ -36,6 +36,10 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 name = "decoder"
 harness = false
 
+[[bench]]
+name = "stream_blocks"
+harness = false
+
 [profile.release]
 codegen-units = 1
 lto = false
