@@ -215,33 +215,31 @@ pub async fn stream_blocks<R: Read, W: Write>(
             Ok(message) => {
                 let block = decode_block_from_bytes(&message)?;
                 block_number = block.number as usize;
-
-                if block_number != 0 {
-                    let block_clone = block.clone();
-                    let receipts_check_process = tokio::task::spawn_blocking(move || {
-                        let valid_receipts = check_receipt_root(&block_clone);
-                        match valid_receipts {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!("Invalid receipt root: {}", err);
-                            }
+                
+                let block_clone = block.clone();
+                let receipts_check_process = tokio::task::spawn_blocking(move || {
+                    let valid_receipts = check_receipt_root(&block_clone);
+                    match valid_receipts {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::error!("Invalid receipt root: {}", err);
                         }
-                    });
+                    }
+                });
 
-                    let block_clone = block.clone();
-                    let transactions_check_process = tokio::task::spawn_blocking(move || {
-                        let valid_transactions = check_transaction_root(&block_clone);
-                        match valid_transactions {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!("Invalid transaction root: {}", err);
-                            }
+                let block_clone = block.clone();
+                let transactions_check_process = tokio::task::spawn_blocking(move || {
+                    let valid_transactions = check_transaction_root(&block_clone);
+                    match valid_transactions {
+                        Ok(_) => {}
+                        Err(err) => {
+                            log::error!("Invalid transaction root: {}", err);
                         }
-                    });
-                    let joint_return = join![receipts_check_process, transactions_check_process];
-                    joint_return.0.map_err(|err| DecodeError::JoinError(err))?;
-                    joint_return.1.map_err(|err| DecodeError::JoinError(err))?;
-                }
+                    }
+                });
+                let joint_return = join![receipts_check_process, transactions_check_process];
+                joint_return.0.map_err(|err| DecodeError::JoinError(err))?;
+                joint_return.1.map_err(|err| DecodeError::JoinError(err))?;
 
                 let header_record_with_number = HeaderRecordWithNumber::try_from(block)?;
                 let header_record_bin = bincode::serialize(&header_record_with_number)
