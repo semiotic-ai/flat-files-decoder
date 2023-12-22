@@ -5,7 +5,7 @@ use std::{
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use decoder::{
-    dbin::DbinFile, receipts::check_receipt_root, sf, transactions::check_transaction_root,
+    dbin::{DbinFile, error::DbinFileError}, receipts::check_receipt_root, sf, transactions::check_transaction_root,
 };
 use prost::Message;
 
@@ -16,37 +16,35 @@ fn read_decode_check_bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("read-decode-check");
     group.sample_size(ITERS_PER_FILE);
 
-    // group.bench_function("read-message-stream", |b| {
-    //     let files = fs::read_dir("benchmark_files/pre_merge").expect("Failed to read dir");
-    //     for file in files {
-    //         let path = file.expect("Failed to get path").path();
-    //         match path.extension() {
-    //             None => continue,
-    //             Some(ext) => {
-    //                 if ext != "dbin" {
-    //                     continue;
-    //                 }
-    //             }
-    //         }
-    //         let file = File::open(&path).expect("Failed to open file");
-    //         let mut reader = BufReader::new(file);
-    //         loop {
-    //             b.iter(||  {
-    //                 let _ = black_box(DbinFile::read_message_stream(&mut reader));
-    //             });
-    //             let file = File::open(&path).expect("Failed to open file");
-    //             let mut reader = BufReader::new(file);
-    //             let message = DbinFile::read_message_stream(&mut reader);
-    //             match message {
-    //                 Ok(_) => continue,
-    //                     Err(_) => {
-    //                         break;
-    //                     }
-    //                 }
+    group.bench_function("read-message-stream", |b| {
+        let files = fs::read_dir("benchmark_files/pre_merge").expect("Failed to read dir");
+        for file in files {
+            let path = file.expect("Failed to get path").path();
+            match path.extension() {
+                None => continue,
+                Some(ext) => {
+                    if ext != "dbin" {
+                        continue;
+                    }
+                }
+            }
+            let file = File::open(&path).expect("Failed to open file");
+            let mut reader = BufReader::new(file);
+            let mut message: Result<Vec<u8>, decoder::dbin::error::DbinFileError> = Err(DbinFileError::InvalidDBINBytes);
+            loop {
+                b.iter(||  {
+                    message = black_box(DbinFile::read_message_stream(&mut reader));
+                });
+                match message {
+                    Ok(_) => continue,
+                        Err(_) => {
+                            break;
+                        }
+                    }
 
-    //         }
-    //     }
-    // });
+            }
+        }
+    });
 
     group.bench_function("decode-bstream", |b| {
         let files = fs::read_dir("benchmark_files/pre_merge").expect("Failed to read dir");
