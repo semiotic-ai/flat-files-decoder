@@ -169,18 +169,18 @@ fn handle_block(
         check_receipt_root(&block)?;
         check_transaction_root(&block)?;
     }
-    //TODO: Fix outputing
-    // if let Some(output) = output {
-    //     let file_name = format!("{}/block-{}.json", output, block.number);
-    //     let mut out_file = File::create(file_name)?;
 
-    //     let block_json = protobuf_json_mapping::print_to_string(&block)
-    //         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+    if let Some(output) = output {
+        let file_name = format!("{}/block-{}.json", output, block.number);
+        let mut out_file = File::create(file_name)?;
 
-    //     out_file
-    //         .write_all(block_json.as_bytes())
-    //         .map_err(DecodeError::IoError)?;
-    // }
+        let block_json = serde_json::to_string(&block)
+        .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
+
+        out_file
+            .write_all(block_json.as_bytes())
+            .map_err(DecodeError::IoError)?;
+    }
 
     Ok(block)
 }
