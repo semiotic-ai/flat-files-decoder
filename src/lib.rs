@@ -14,6 +14,7 @@ use crate::error::DecodeError;
 use crate::headers::check_valid_header;
 use crate::transactions::check_transaction_root;
 use dbin::DbinFile;
+use error::CheckError;
 use headers::HeaderRecordWithNumber;
 use prost::Message;
 use rayon::prelude::*;
@@ -216,27 +217,14 @@ pub async fn stream_blocks<R: Read, W: Write>(
                 let block = decode_block_from_bytes(&message)?;
                 block_number = block.number as usize;
                 
-                let block_clone = block.clone();
-                let receipts_check_process = tokio::task::spawn_blocking(move || {
-                    let valid_receipts = check_receipt_root(&block_clone);
-                    match valid_receipts {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Invalid receipt root: {}", err);
-                        }
-                    }
+                let receipts_check_process = spawn_check(&block, |b| {
+                    check_receipt_root(b).map_err(|e| CheckError::ReceiptError(e))
+                });
+                
+                let transactions_check_process = spawn_check(&block, |b| {
+                    check_transaction_root(b).map_err(|e| CheckError::TransactionError(e))
                 });
 
-                let block_clone = block.clone();
-                let transactions_check_process = tokio::task::spawn_blocking(move || {
-                    let valid_transactions = check_transaction_root(&block_clone);
-                    match valid_transactions {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Invalid transaction root: {}", err);
-                        }
-                    }
-                });
                 let joint_return = join![receipts_check_process, transactions_check_process];
                 joint_return.0.map_err(|err| DecodeError::JoinError(err))?;
                 joint_return.1.map_err(|err| DecodeError::JoinError(err))?;
@@ -273,6 +261,22 @@ fn decode_block_from_bytes(bytes: &Vec<u8>) -> Result<Block, DecodeError> {
     let block = sf::ethereum::r#type::v2::Block::decode(block_stream.payload_buffer.as_slice())
         .map_err(|err| DecodeError::ProtobufError(err.to_string()))?;
     Ok(block)
+}
+
+// Define a generic function to spawn a blocking task for a given check.
+fn spawn_check<F>(block: &Block, check: F) -> tokio::task::JoinHandle<()>
+where
+F: FnOnce(&Block) -> Result<(), CheckError> + Send + 'static,
+{
+    let block_clone = block.clone();
+    tokio::task::spawn_blocking(move || {
+        match check(&block_clone) {
+            Ok(_) => {}
+            Err(err) => {
+                log::error!("{}", err);
+            }
+        }
+    })
 }
 
 #[cfg(test)]

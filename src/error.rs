@@ -26,3 +26,23 @@ pub enum DecodeError {
     #[error("Join error: {0}")]
     JoinError(JoinError),
 }
+
+// Define an enum for all possible error types
+#[derive(Debug)]
+pub enum CheckError {
+    ReceiptError(ReceiptError),  // Replace with actual error types
+    TransactionError(TransactionError),
+    // Add more as needed
+}
+
+impl std::fmt::Display for CheckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            CheckError::ReceiptError(e) => write!(f, "Receipt Error: {}", e),
+            CheckError::TransactionError(e) => write!(f, "Transaction Error: {}", e),
+            // Handle other errors
+        }
+    }
+}
+
+impl std::error::Error for CheckError {}
