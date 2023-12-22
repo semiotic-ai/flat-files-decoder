@@ -57,14 +57,3 @@ fn map_bloom(slice: &[u8]) -> Result<Bloom, ReceiptError> {
         Err(ReceiptError::InvalidBloom(hex::encode(slice)))
     }
 }
-
-fn map_bloom(slice: &[u8]) -> Result<Bloom, ReceiptError> {
-    if slice.len() == 256 {
-        let array: [u8; 256] = slice
-            .try_into()
-            .expect("Slice length doesn't match array length");
-        Ok(Bloom(array))
-    } else {
-        Err(ReceiptError::InvalidBloom(hex::encode(slice)))
-    }
-}
