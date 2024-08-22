@@ -1,11 +1,11 @@
 use crate::transactions::access_list::compute_access_list;
 use crate::transactions::error::TransactionError;
 use crate::transactions::tx_type::map_tx_type;
-use alloy_primitives::{TxKind, Uint};
+use alloy_primitives::{FixedBytes, TxKind, Uint};
 use reth_primitives::{
-    Address, Bytes, ChainId, Transaction, TxEip1559, TxEip2930, TxLegacy, TxType,
+    Address, Bytes, ChainId, Transaction, TxEip1559, TxEip2930, TxEip4844, TxLegacy, TxType,
 };
-use sf_protos::ethereum::r#type::v2::{BigInt, CallType, TransactionTrace};
+use sf_protos::ethereum::r#type::v2::{CallType, TransactionTrace};
 
 use super::bigint_to_u128;
 
@@ -15,22 +15,14 @@ pub fn trace_to_transaction(trace: &TransactionTrace) -> Result<Transaction, Tra
     let tx_type = map_tx_type(&trace.r#type)?;
 
     let nonce = trace.nonce;
-    let trace_gas_price = match trace.gas_price.clone() {
-        Some(gas_price) => gas_price,
-        None => BigInt { bytes: vec![0] },
-    };
-    let gas_price = bigint_to_u128(trace_gas_price)?;
+    let gas_price = bigint_to_u128(trace.gas_price.clone().unwrap_or_default())?;
     let gas_limit = trace.gas_limit;
 
     let to = get_tx_kind(trace)?;
 
     let chain_id = CHAIN_ID;
 
-    let trace_value = match trace.value.clone() {
-        Some(value) => value,
-        None => BigInt { bytes: vec![0] },
-    };
-    let value = Uint::from(bigint_to_u128(trace_value)?);
+    let value = Uint::from(bigint_to_u128(trace.value.clone().unwrap_or_default())?);
     let input = Bytes::copy_from_slice(trace.input.as_slice());
 
     let transaction: Transaction = match tx_type {
@@ -70,16 +62,11 @@ pub fn trace_to_transaction(trace: &TransactionTrace) -> Result<Transaction, Tra
         TxType::Eip1559 => {
             let access_list = compute_access_list(&trace.access_list)?;
 
-            let trace_max_fee_per_gas = match trace.max_fee_per_gas.clone() {
-                Some(max_fee_per_gas) => max_fee_per_gas,
-                None => BigInt { bytes: vec![0] },
-            };
+            let trace_max_fee_per_gas = trace.max_fee_per_gas.clone().unwrap_or_default();
             let max_fee_per_gas = bigint_to_u128(trace_max_fee_per_gas)?;
 
-            let trace_max_priority_fee_per_gas = match trace.max_priority_fee_per_gas.clone() {
-                Some(max_priority_fee_per_gas) => max_priority_fee_per_gas,
-                None => BigInt { bytes: vec![0] },
-            };
+            let trace_max_priority_fee_per_gas =
+                trace.max_priority_fee_per_gas.clone().unwrap_or_default();
             let max_priority_fee_per_gas = bigint_to_u128(trace_max_priority_fee_per_gas)?;
 
             Transaction::Eip1559(TxEip1559 {
@@ -94,7 +81,28 @@ pub fn trace_to_transaction(trace: &TransactionTrace) -> Result<Transaction, Tra
                 input,
             })
         }
-        TxType::Eip4844 => unimplemented!(),
+        TxType::Eip4844 => Transaction::Eip4844(TxEip4844 {
+            chain_id,
+            nonce,
+            gas_limit,
+            max_fee_per_gas: bigint_to_u128(trace.max_fee_per_gas.clone().unwrap_or_default())?,
+            max_priority_fee_per_gas: bigint_to_u128(
+                trace.max_priority_fee_per_gas.clone().unwrap_or_default(),
+            )?,
+            placeholder: None,
+            to: Address::from_slice(trace.to.as_slice()),
+            value,
+            access_list: compute_access_list(&trace.access_list)?,
+            blob_versioned_hashes: trace
+                .blob_hashes
+                .iter()
+                .map(|v| FixedBytes::from_slice(v.as_slice()))
+                .collect(),
+            max_fee_per_blob_gas: bigint_to_u128(
+                trace.blob_gas_fee_cap.clone().unwrap_or_default(),
+            )?,
+            input,
+        }),
     };
 
     Ok(transaction)
